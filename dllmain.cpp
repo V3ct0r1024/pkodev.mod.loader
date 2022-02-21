@@ -1,7 +1,3 @@
-#define _CRT_SECURE_NO_WARNINGS
-#include <iostream>
-
-
 #include <Windows.h>
 #include <detours.h>
 
@@ -137,10 +133,6 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 		// DLL attached to the proccess
         case DLL_PROCESS_ATTACH:
 
-			//AllocConsole();
-			//freopen("CONOUT$", "w", stdout);
-			//std::cout << "Hello world!" << std::endl;
-		
 			// Get address of entry point and linker timestamp
 			{
 				// Pointers to DOS, PE and COFF headers of .exe file
@@ -171,10 +163,6 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 					);
 				}
 			}
-
-			std::cout << "pkodev::global::mainCRTStartup = " << pkodev::global::mainCRTStartup << std::endl;
-			std::cout << "pkodev::global::TimeDateStamp = " << pkodev::global::TimeDateStamp << std::endl;
-			std::cout << "pkodev::global::RtlExitUserProcess = " << pkodev::global::RtlExitUserProcess << std::endl;
 
 			// Enable hooks
 			if ( (pkodev::global::mainCRTStartup != nullptr)
@@ -213,7 +201,6 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 // Hooked version of mainCRTStartup() function
 int __cdecl mainCRTStartup()
 {
-	std::cout << "mainCRTStartup" << std::endl;
 	// Launch mod system
 	Start();
 
