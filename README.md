@@ -1,4 +1,4 @@
-[![PKOdev.NET](https://pkodev.net/uploads/monthly_2022_02/logo-background.png.d7a190633d23e60fbfdfb9340726ba82.png "PKOdev.NET")](http://pkodev.net "PKOdev.NET")
+[![PKOdev.NET](https://a.radikal.ru/a07/2202/b6/64077957c2ec.png "PKOdev.NET")](http://pkodev.net "PKOdev.NET")
 
 ## TOP/PKO/KOP mod loading system: pkodev.mod.loader
 Mod loading system for TOP/PKO/KOP server and client.
