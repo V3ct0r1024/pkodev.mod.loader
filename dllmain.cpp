@@ -4,8 +4,8 @@
 #include <iostream>
 #include <iomanip>
 #include <vector>
-#include <algorithm>
 #include <string>
+#include <regex>
 
 #include "loader.h"
 
@@ -457,7 +457,7 @@ void SearchLibraries(const std::string& path, std::vector<std::string>& arr)
 		do
 		{
 			// Convert char* string to std::string
-			std::string file(FindFileData.cFileName);
+			const std::string file(FindFileData.cFileName);
 			
 			// Check that file is a directory
 			if ( FindFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY )
@@ -477,35 +477,21 @@ void SearchLibraries(const std::string& path, std::vector<std::string>& arr)
 			}
 			else
 			{
-				// Check that file name contains five dots
-				if ( std::count(file.begin(), file.end(), '.') != 5 )
+				// Regular expression for a mod library name
+				static const std::regex name_regex(
+					"pkodev\\.mod\\.\\w+\\.(?:client|server)\\.\\w+\\.dll",
+					std::regex::icase
+				);
+
+				// Check that the file name matches the pattern
+				if (std::regex_match(file, name_regex) == true)
 				{
-					// Skip file
-					continue;
+					// Build full file path
+					sprintf_s(buf, sizeof(buf), "%s\\%s", path.c_str(), file.c_str());
+
+					// Add the file to list
+					arr.push_back(buf);
 				}
-
-				// Make file name lower case
-				std::transform(file.begin(), file.end(), file.begin(), ::tolower);
-
-				// Check that name starts from string "pkodev.mod."
-				if ( file.find("pkodev.mod.") != 0 )
-				{
-					// Skip file
-					continue;
-				}
-
-				// Get file extension
-				if ( file.substr( file.find_last_of(".") ) != ".dll" )
-				{
-					// Skip file
-					continue;
-				}
-
-				// Build full file path
-				sprintf_s(buf, sizeof(buf), "%s\\%s", path.c_str(), file.c_str());
-
-				// Add the file to list
-				arr.push_back(buf);
 			}
 		} 
 		while ( FindNextFileA(hFind, &FindFileData) == TRUE );
