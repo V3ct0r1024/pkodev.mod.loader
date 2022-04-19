@@ -231,6 +231,7 @@ void Start()
 	pkodev::global::exes.push_back( { GAME_13X_3,     "Game.exe 1.3x (ID: 3)", 1244511158 } );
 	pkodev::global::exes.push_back( { GAME_13X_4,     "Game.exe 1.3x (ID: 4)", 1585009030 } );
 	pkodev::global::exes.push_back( { GAME_13X_5,     "Game.exe 1.3x (ID: 5)", 1207214236 } );
+	pkodev::global::exes.push_back( { GATESERVER_138, "GateServer 1.38",       1224838480 } );
 
 	// Write a welcome message
 	std::cout << "[pkodev.mod.loader] -----------------------------------------------" << std::endl;
