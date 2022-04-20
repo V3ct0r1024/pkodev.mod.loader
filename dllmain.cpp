@@ -5,6 +5,7 @@
 #include <iomanip>
 #include <fstream>
 #include <vector>
+#include <queue>
 #include <string>
 #include <regex>
 #include <algorithm>
@@ -73,6 +74,9 @@ namespace pkodev
 		// .dll handle
 		HMODULE handle;
 
+		// Load priority
+		unsigned int priority;
+
 		// Constructor
 		mod() :
 			name(""),
@@ -81,7 +85,8 @@ namespace pkodev
 			path(""),
 			start(nullptr),
 			stop(nullptr),
-			handle(nullptr)
+			handle(nullptr),
+			priority(0)
 		{
 
 		}
@@ -89,6 +94,15 @@ namespace pkodev
 
 	namespace global
 	{
+		// Regular expression for a mod library name
+		const std::regex name_regex("^pkodev\\.mod\\.\\w+$", std::regex::icase);
+
+		// Regular expression for a mod library name (.dll)
+		const std::regex dll_regex(
+			"^pkodev\\.mod\\.\\w+\\.(?:client|server|gate)\\.\\w+\\.dll$",
+			std::regex::icase
+		);
+
 		// Pointer to mainCRTStartup() function from .exe
 		mainCRTStartup__Ptr mainCRTStartup = nullptr;
 
@@ -115,11 +129,17 @@ void SearchLibraries(const std::string& path, std::vector<std::string>& arr);
 // Load the list of disabled mods
 void LoadDotDisabled(const std::string& path, std::vector<std::string>& disabled);
 
+// Load the mod priority list
+void LoadDotPriority(const std::string& path, std::queue<std::string>& priority);
+
 // Hooked version of mainCRTStartup() function
 int __cdecl mainCRTStartup();
 
 // Hooked version of RtlExitUserProcess() function
 void __stdcall RtlExitUserProcess(UINT code);
+
+// Utils: Compare two strings in case-insensitive mod
+bool StrCompareI(const std::string& str1, const std::string& str2);
 
 
 // Dummy function for export to GameServer.exe and Game.exe
@@ -271,6 +291,11 @@ void Start()
 	std::vector<std::string> disabled;
 	LoadDotDisabled("mods\\.disabled", disabled);
 
+	// Load priority list
+	std::queue<std::string> priority;
+	LoadDotPriority("mods\\.priority", priority);
+
+
 	// Disabled mods counter
 	unsigned int disabled_counter = 0;
 
@@ -329,21 +354,7 @@ void Start()
 		auto disabled_it = std::find_if(disabled.cbegin(), disabled.cend(),
 			[&name](const std::string& name_) -> bool
 			{
-				return (
-					(name_.length() == name.length()) &&
-					std::equal(
-						name_.cbegin(), name_.cend(), name.cbegin(), name.cend(),
-						[](const char& c1, const char& c2) -> bool
-						{
-							if (c1 == c2)
-							{
-								return true;
-							}
-
-							return (std::tolower(c1) == std::tolower(c2));
-						}
-					) == true
-				);
+				return StrCompareI(name, name_);
 			}
 		);
 
@@ -429,7 +440,7 @@ void Start()
 	auto extract_filepath = [](const std::string& path) -> std::string
 	{
 		// Looking for last slash
-		std::size_t pos = path.find_last_of("/\\");
+		const std::size_t pos = path.find_last_of("/\\");
 
 		// Check that the slash is found
 		if (pos != std::string::npos)
@@ -441,6 +452,42 @@ void Start()
 		// Could not extract directory
 		return path;
 	};
+
+	// Sort mods by priority
+	unsigned int priority_counter = 0;
+	if (priority.empty() == false)
+	{
+		// Get mods priority
+		while (priority.empty() == false)
+		{
+			// Get current mod name
+			const std::string& name_ = priority.front();
+			priority.pop();
+
+			// Search the mod in the list of mods
+			auto it = std::find_if(pkodev::global::mods.begin(), pkodev::global::mods.end(),
+				[&name_](const pkodev::mod& mod_) -> bool
+				{
+					return StrCompareI(mod_.name, name_);
+				}
+			);
+
+			// Check that mod is found
+			if (it != pkodev::global::mods.end())
+			{
+				// Set mod priority
+				it->priority = ++priority_counter;
+			}
+		}
+
+		// Sort the list of mods
+		std::sort(pkodev::global::mods.begin(), pkodev::global::mods.end(),
+			[](const pkodev::mod& a, const pkodev::mod& b)
+			{
+				return a.priority > b.priority;
+			}
+		);
+	}
 
 	// Start mods
 	for (const pkodev::mod& mod : pkodev::global::mods)
@@ -522,14 +569,8 @@ void SearchLibraries(const std::string& path, std::vector<std::string>& arr)
 			}
 			else
 			{
-				// Regular expression for a mod library name
-				static const std::regex name_regex(
-					"^pkodev\\.mod\\.\\w+\\.(?:client|server|gate)\\.\\w+\\.dll$",
-					std::regex::icase
-				);
-
 				// Check that the file name matches the pattern
-				if (std::regex_match(file, name_regex) == true)
+				if (std::regex_match(file, pkodev::global::dll_regex) == true)
 				{
 					// Build full file path
 					sprintf_s(buf, sizeof(buf), "%s\\%s", path.c_str(), file.c_str());
@@ -559,8 +600,50 @@ void LoadDotDisabled(const std::string& path, std::vector<std::string>& disabled
 		return;
 	}
 
-	// Regular expression for a mod library name
-	const std::regex name_regex("^pkodev\\.mod\\.\\w+$", std::regex::icase);
+	// Read the file line-by-line
+	for (std::string line(""); std::getline(file, line); )
+	{
+		// Remove the spaces from the line
+		line.erase(std::remove_if(line.begin(), line.end(), ::isspace), line.end());
+
+		// Check that line is empty
+		if (line.empty() == true)
+		{
+			// Skip the line
+			continue;
+		}
+
+		// Check that line is commented
+		if (line.find("//") == 0)
+		{
+			// Skip the line
+			continue;
+		}
+
+		// Check that the file name matches the pattern
+		if (std::regex_match(line, pkodev::global::name_regex) == true)
+		{
+			// Add the file to list
+			disabled.push_back(line);
+		}
+	}
+
+	// Close the file
+	file.close();
+}
+
+// Load the mod priority list
+void LoadDotPriority(const std::string& path, std::queue<std::string>& priority)
+{
+	// Try to open the .priority file
+	std::ifstream file(path, std::ios::in);
+
+	// Check that file is open
+	if (file.is_open() == false)
+	{
+		// The file not found or cannot be read
+		return;
+	}
 
 	// Read the file line-by-line
 	for (std::string line(""); std::getline(file, line); )
@@ -583,13 +666,38 @@ void LoadDotDisabled(const std::string& path, std::vector<std::string>& disabled
 		}
 
 		// Check that the file name matches the pattern
-		if (std::regex_match(line, name_regex) == true)
+		if (std::regex_match(line, pkodev::global::name_regex) == true)
 		{
 			// Add the file to list
-			disabled.push_back(line);
+			priority.push(line);
 		}
 	}
 
 	// Close the file
 	file.close();
+}
+
+// Utils: Compare two strings in case-insensitive mod
+bool StrCompareI(const std::string& str1, const std::string& str2)
+{
+	// Compare strings length
+	if (str1.length() != str2.length())
+	{
+		// Strings are not equal
+		return false;
+	}
+
+	// Compare strings characters
+	return std::equal(
+		str1.cbegin(), str1.cend(), str2.cbegin(), str2.cend(),
+		[](const char& c1, const char& c2) -> bool
+		{
+			if (c1 == c2)
+			{
+				return true;
+			}
+
+			return ( std::tolower(c1) == std::tolower(c2) );
+		}
+	);
 }
