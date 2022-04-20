@@ -79,7 +79,7 @@ namespace pkodev
 
 		// Constructor
 		pkodev_mod() :
-			priority(0),
+			priority(UINT32_MAX),
 			name(""),
 			version(""),
 			author(""),
@@ -241,15 +241,15 @@ void Start()
 {
 	// Supported executables files table
 	std::vector<pkodev::executable_version> exes;
-	exes.push_back( { TS_GAMESERVER_136, GAMESERVER_136, "GameServer 1.36"        } );
-	exes.push_back( { TS_GAMESERVER_138, GAMESERVER_138, "GameServer 1.38"        } );
-	exes.push_back( { TS_GAME_13X_0,     GAME_13X_0,     "Game.exe 1.3x (ID: 0)"  } );
-	exes.push_back( { TS_GAME_13X_1,     GAME_13X_1,     "Game.exe 1.3x (ID: 1)"  } );
-	exes.push_back( { TS_GAME_13X_2,     GAME_13X_2,     "Game.exe 1.3x (ID: 2)"  } );
-	exes.push_back( { TS_GAME_13X_3,     GAME_13X_3,     "Game.exe 1.3x (ID: 3)"  } );
-	exes.push_back( { TS_GAME_13X_4,     GAME_13X_4,     "Game.exe 1.3x (ID: 4)"  } );
-	exes.push_back( { TS_GAME_13X_5,     GAME_13X_5,     "Game.exe 1.3x (ID: 5)"  } );
-	exes.push_back( { TS_GATESERVER_138, GATESERVER_138, "GateServer 1.38"        } );
+	exes.push_back( { GAMESERVER_136, TS_GAMESERVER_136, "GameServer 1.36"        } );
+	exes.push_back( { GAMESERVER_138, TS_GAMESERVER_138, "GameServer 1.38"        } );
+	exes.push_back( { GAME_13X_0,     TS_GAME_13X_0,     "Game.exe 1.3x (ID: 0)"  } );
+	exes.push_back( { GAME_13X_1,     TS_GAME_13X_1,     "Game.exe 1.3x (ID: 1)"  } );
+	exes.push_back( { GAME_13X_2,     TS_GAME_13X_2,     "Game.exe 1.3x (ID: 2)"  } );
+	exes.push_back( { GAME_13X_3,     TS_GAME_13X_3,     "Game.exe 1.3x (ID: 3)"  } );
+	exes.push_back( { GAME_13X_4,     TS_GAME_13X_4,     "Game.exe 1.3x (ID: 4)"  } );
+	exes.push_back( { GAME_13X_5,     TS_GAME_13X_5,     "Game.exe 1.3x (ID: 5)"  } );
+	exes.push_back( { GATESERVER_138, TS_GATESERVER_138, "GateServer 1.38"        } );
 
 	// Write a welcome message
 	std::cout << "[pkodev.mod.loader] -----------------------------------------------" << std::endl;
@@ -371,7 +371,6 @@ void Start()
 
 		// Create mod record
 		pkodev::pkodev_mod mod;
-		mod.priority = 0;
 		mod.name     = name;
 		mod.version  = std::string(info.version);
 		mod.author   = std::string(info.author);
@@ -384,9 +383,47 @@ void Start()
 		pkodev::mods.push_back(mod);
 	}
 
-	// Print the list of found and enabled mods
+	// Sort and print the list of found and enabled mods
 	if (pkodev::mods.empty() == false)
 	{
+		// Sort mods by load priority
+		unsigned int priority_counter = 0;
+		if (priority.empty() == false)
+		{
+			// Get mods priority
+			while (priority.empty() == false)
+			{
+				// Get current mod name
+				const std::string& name = priority.front();
+
+				// Search the mod in the list of mods
+				auto it = std::find_if(pkodev::mods.begin(), pkodev::mods.end(),
+					[&name](const pkodev::pkodev_mod& mod) -> bool
+					{
+						return StrCompareI(mod.name, name);
+					}
+				);
+
+				// Check that mod is found
+				if (it != pkodev::mods.end())
+				{
+					// Set mod priority
+					it->priority = ++priority_counter;
+				}
+
+				// Remove current priority from the queue
+				priority.pop();
+			}
+
+			// Sort the list of mods
+			std::sort(pkodev::mods.begin(), pkodev::mods.end(),
+				[](const pkodev::pkodev_mod& a, const pkodev::pkodev_mod& b)
+				{
+					return (a.priority < b.priority);
+				}
+			);
+		}
+
 		// Mods counter
 		unsigned int counter = 0;
 
@@ -395,14 +432,14 @@ void Start()
 
 		// Print table header
 		std::cout << '+' << std::setfill('-') << std::setw(5) << '+'  <<        std::setw(33) << '+'    <<        std::setw(11) << '+'        <<        std::setw(17) << '+'              << std::endl;
-		std::cout << '|' << std::setfill(' ') << std::setw(4) << "# " << '|' << std::setw(32) << "Mod " << '|' << std::setw(10) << "Version " << '|' << std::setw(25) << "Author " << '|' << std::endl;
+		std::cout << '|' << std::setfill(' ') << std::setw(4) << "# " << '|' << std::setw(32) << "Mod " << '|' << std::setw(10) << "Version " << '|' << std::setw(16) << "Author " << '|' << std::endl;
 		std::cout << '+' << std::setfill('-') << std::setw(5) << '+'  <<        std::setw(33) << '+'    <<        std::setw(11) << '+'        <<        std::setw(17) << '+'              << std::endl;
 
 		// Print mods
 		for (const pkodev::pkodev_mod& mod : pkodev::mods)
 		{
 			// Print information about the mod
-			std::cout << '|' << std::setfill(' ') << std::setw(3) << ++counter << '.' << '|' << std::setw(31) << mod.name << ' ' << '|' << std::setw(9) << mod.version << ' ' << '|' << std::setw(24) << mod.author << ' ' << '|' << std::endl;
+			std::cout << '|' << std::setfill(' ') << std::setw(3) << ++counter << '.' << '|' << std::setw(31) << mod.name << ' ' << '|' << std::setw(9) << mod.version << ' ' << '|' << std::setw(15) << mod.author << ' ' << '|' << std::endl;
 		}
 
 		// Print table bottom
@@ -438,73 +475,42 @@ void Start()
 		return path;
 	};
 
-	// Sort mods by load priority
-	unsigned int priority_counter = 0;
-	if (priority.empty() == false)
-	{
-		// Get mods priority
-		while (priority.empty() == false)
-		{
-			// Get current mod name
-			const std::string& name = priority.front();
-
-			// Search the mod in the list of mods
-			auto it = std::find_if(pkodev::mods.begin(), pkodev::mods.end(),
-				[&name](const pkodev::pkodev_mod& mod) -> bool
-				{
-					return StrCompareI(mod.name, name);
-				}
-			);
-
-			// Check that mod is found
-			if (it != pkodev::mods.end())
-			{
-				// Set mod priority
-				it->priority = ++priority_counter;
-			}
-
-			// Remove current priority from the queue
-			priority.pop();
-		}
-
-		// Sort the list of mods
-		std::sort(pkodev::mods.begin(), pkodev::mods.end(),
-			[](const pkodev::pkodev_mod& a, const pkodev::pkodev_mod& b)
-			{
-				return (a.priority > b.priority);
-			}
-		);
-	}
-
 	// Start mods
-	for (const pkodev::pkodev_mod& mod : pkodev::mods)
-	{
-		// Start the mod
-		mod.start( extract_filepath(mod.path).c_str() );
-	}
+	std::for_each(pkodev::mods.begin(), pkodev::mods.end(),
+		[&](const pkodev::pkodev_mod& mod) -> void
+		{
+			// Start the mod
+			mod.start(extract_filepath(mod.path).c_str());
+		}
+	);
 
-	// Write a message that mods are launched
-	std::cout << "[pkodev.mod.loader] All mods launched!" << std::endl << std::endl;
+	// Write a message that mods are loaded
+	std::cout << "[pkodev.mod.loader] All mods loaded!" << std::endl << std::endl;
 }
 
 // Stop the mod loader system
 void Stop()
 {
-	// Disable all mods
-	for (const pkodev::pkodev_mod& mod : pkodev::mods)
-	{
-		// Stop the mod
-		mod.stop();
-		
-		// Unload mod .dll
-		FreeLibrary(mod.handle);
+	// Stop mods
+	std::for_each(pkodev::mods.rbegin(), pkodev::mods.rend(),
+		[](const pkodev::pkodev_mod& mod) -> void
+		{
+			// Stop the mod
+			mod.stop();
 
-		// Write a message that mod is unloaded
-		std::cout << "[pkodev.mod.loader] " << mod.name << " successfully unloaded!" << std::endl;
-	}
+			// Unload mod .dll
+			FreeLibrary(mod.handle);
+
+			// Write a message that mod is unloaded
+			std::cout << "[pkodev.mod.loader] " << mod.name << " successfully unloaded!" << std::endl;
+		}
+	);
 
 	// Clear mods list
 	pkodev::mods.clear();
+
+	// Write a message that mods are unloaded
+	std::cout << "[pkodev.mod.loader] All mods unloaded!" << std::endl << std::endl;
 }
 
 // Search mod libraries
