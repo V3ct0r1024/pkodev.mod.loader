@@ -3,9 +3,12 @@
 
 #include <iostream>
 #include <iomanip>
+#include <fstream>
 #include <vector>
 #include <string>
 #include <regex>
+#include <algorithm>
+#include <cctype>
 
 #include "loader.h"
 
@@ -78,7 +81,7 @@ namespace pkodev
 			path(""),
 			start(nullptr),
 			stop(nullptr),
-			handle(NULL)
+			handle(nullptr)
 		{
 
 		}
@@ -95,9 +98,6 @@ namespace pkodev
 		// Linker timestamp
 		unsigned int TimeDateStamp = 0;
 
-		// List of supported .exe files
-		std::vector<exe_ver> exes;
-
 		// List of available mods
 		std::vector<mod> mods;
 	}
@@ -111,6 +111,9 @@ void Stop();
 
 // Search mod libraries
 void SearchLibraries(const std::string& path, std::vector<std::string>& arr);
+
+// Load the list of disabled mods
+void LoadDotDisabled(const std::string& path, std::vector<std::string>& disabled);
 
 // Hooked version of mainCRTStartup() function
 int __cdecl mainCRTStartup();
@@ -221,17 +224,17 @@ void __stdcall RtlExitUserProcess(UINT code)
 // Start mod system
 void Start()
 {
-	// Build supported executables files table
-	pkodev::global::exes.clear();
-	pkodev::global::exes.push_back( { GAMESERVER_136, "GameServer 1.36",       1204708785 } );
-	pkodev::global::exes.push_back( { GAMESERVER_138, "GameServer 1.38",       1225867911 } );
-	pkodev::global::exes.push_back( { GAME_13X_0,     "Game.exe 1.3x (ID: 0)", 1222073761 } );
-	pkodev::global::exes.push_back( { GAME_13X_1,     "Game.exe 1.3x (ID: 1)", 1243412597 } );
-	pkodev::global::exes.push_back( { GAME_13X_2,     "Game.exe 1.3x (ID: 2)", 1252912474 } );
-	pkodev::global::exes.push_back( { GAME_13X_3,     "Game.exe 1.3x (ID: 3)", 1244511158 } );
-	pkodev::global::exes.push_back( { GAME_13X_4,     "Game.exe 1.3x (ID: 4)", 1585009030 } );
-	pkodev::global::exes.push_back( { GAME_13X_5,     "Game.exe 1.3x (ID: 5)", 1207214236 } );
-	pkodev::global::exes.push_back( { GATESERVER_138, "GateServer 1.38",       1224838480 } );
+	// Supported executables files table
+	std::vector<pkodev::exe_ver> exes;
+	exes.push_back( { GAMESERVER_136, "GameServer 1.36",       1204708785 } );
+	exes.push_back( { GAMESERVER_138, "GameServer 1.38",       1225867911 } );
+	exes.push_back( { GAME_13X_0,     "Game.exe 1.3x (ID: 0)", 1222073761 } );
+	exes.push_back( { GAME_13X_1,     "Game.exe 1.3x (ID: 1)", 1243412597 } );
+	exes.push_back( { GAME_13X_2,     "Game.exe 1.3x (ID: 2)", 1252912474 } );
+	exes.push_back( { GAME_13X_3,     "Game.exe 1.3x (ID: 3)", 1244511158 } );
+	exes.push_back( { GAME_13X_4,     "Game.exe 1.3x (ID: 4)", 1585009030 } );
+	exes.push_back( { GAME_13X_5,     "Game.exe 1.3x (ID: 5)", 1207214236 } );
+	exes.push_back( { GATESERVER_138, "GateServer 1.38",       1224838480 } );
 
 	// Write a welcome message
 	std::cout << "[pkodev.mod.loader] -----------------------------------------------" << std::endl;
@@ -239,17 +242,15 @@ void Start()
 	std::cout << "[pkodev.mod.loader] -----------------------------------------------" << std::endl;
 
 	// Search current .exe in list of supported executables
-	auto exe = std::find_if(
-		pkodev::global::exes.begin(),
-		pkodev::global::exes.end(),
-		[](const pkodev::exe_ver& exe)
+	auto exe = std::find_if(exes.cbegin(), exes.cend(),
+		[](const pkodev::exe_ver& exe) -> bool
 		{
 			return ( pkodev::global::TimeDateStamp == exe.timestamp );
 		}
 	);
 
 	// Check that .exe is supported
-	if ( exe == pkodev::global::exes.end() )
+	if ( exe == exes.cend() )
 	{
 		// Unsupported .exe version!
 		std::cout << "[pkodev.mod.loader] Unsupported .exe file!" << std::endl << std::endl;
@@ -266,6 +267,13 @@ void Start()
 	std::vector<std::string> arr;  // List of dynamic mod libraries
 	SearchLibraries("mods", arr);
 
+	// Search disabled mods
+	std::vector<std::string> disabled;
+	LoadDotDisabled("mods\\.disabled", disabled);
+
+	// Disabled mods counter
+	unsigned int disabled_counter = 0;
+
 	// Load mods . . .
 	for (const std::string& path : arr)
 	{
@@ -273,7 +281,7 @@ void Start()
 		HMODULE dll = LoadLibraryA(path.c_str());
 
 		// Check result
-		if (dll == NULL)
+		if (dll == nullptr)
 		{
 			// Failed to load the .dll!
 			continue;
@@ -294,8 +302,8 @@ void Start()
 			GetProcAddress(dll, "Stop")
 		);
 
-		// Check functions
-		if ( (GetModInformation == NULL) || (Start == NULL) || (Stop == NULL) )
+		// Check functions pointers
+		if ( (GetModInformation == nullptr) || (Start == nullptr) || (Stop == nullptr) )
 		{
 			// DLL doesn't have required functions
 			FreeLibrary(dll);
@@ -314,10 +322,44 @@ void Start()
 			continue;
 		}
 
+		// Get the mod name
+		const std::string name(info.name);
+
+		// Search the mod in the disabled mods list
+		auto disabled_it = std::find_if(disabled.cbegin(), disabled.cend(),
+			[&name](const std::string& name_) -> bool
+			{
+				return (
+					(name_.length() == name.length()) &&
+					std::equal(
+						name_.cbegin(), name_.cend(), name.cbegin(), name.cend(),
+						[](const char& c1, const char& c2) -> bool
+						{
+							if (c1 == c2)
+							{
+								return true;
+							}
+
+							return (std::tolower(c1) == std::tolower(c2));
+						}
+					) == true
+				);
+			}
+		);
+
+		// Check that mod is not disabled
+		if (disabled_it != disabled.cend())
+		{
+			// The mod is disabled
+			++disabled_counter;
+			FreeLibrary(dll);
+			continue;
+		}
+
 		// Search mod in list of loaded mods
-		auto it = std::find_if(
-			pkodev::global::mods.begin(),
-			pkodev::global::mods.end(),
+		auto loaded_it = std::find_if(
+			pkodev::global::mods.cbegin(),
+			pkodev::global::mods.cend(),
 			[&info](const pkodev::mod& mod)
 			{
 				return ( mod.name == std::string(info.name) );
@@ -325,7 +367,7 @@ void Start()
 		);
 
 		// Check that mod is not already loaded
-		if ( it != pkodev::global::mods.end() )
+		if (loaded_it != pkodev::global::mods.cend() )
 		{
 			// Mod is already loaded
 			FreeLibrary(dll);
@@ -334,7 +376,7 @@ void Start()
 
 		// Create mod record
 		pkodev::mod mod;
-		mod.name    = std::string(info.name);
+		mod.name    = name;
 		mod.version = std::string(info.version);
 		mod.author  = std::string(info.author);
 		mod.path    = path;
@@ -357,14 +399,14 @@ void Start()
 
 		// Print table header
 		std::cout << '+' << std::setfill('-') << std::setw(5) << '+'  <<        std::setw(33) << '+'    <<        std::setw(11) << '+'        <<        std::setw(17) << '+'              << std::endl;
-		std::cout << '|' << std::setfill(' ') << std::setw(4) << "# " << '|' << std::setw(32) << "Mod " << '|' << std::setw(10) << "Version " << '|' << std::setw(16) << "Author " << '|' << std::endl;
+		std::cout << '|' << std::setfill(' ') << std::setw(4) << "# " << '|' << std::setw(32) << "Mod " << '|' << std::setw(10) << "Version " << '|' << std::setw(25) << "Author " << '|' << std::endl;
 		std::cout << '+' << std::setfill('-') << std::setw(5) << '+'  <<        std::setw(33) << '+'    <<        std::setw(11) << '+'        <<        std::setw(17) << '+'              << std::endl;
 
 		// Print mods
 		for (const pkodev::mod& mod : pkodev::global::mods)
 		{
 			// Print information about the mod
-			std::cout << '|' << std::setfill(' ') << std::setw(3) << ++counter << '.' << '|' << std::setw(31) << mod.name << ' ' << '|' << std::setw(9) << mod.version << ' ' << '|' << std::setw(15) << mod.author << ' ' << '|' << std::endl;
+			std::cout << '|' << std::setfill(' ') << std::setw(3) << ++counter << '.' << '|' << std::setw(31) << mod.name << ' ' << '|' << std::setw(9) << mod.version << ' ' << '|' << std::setw(24) << mod.author << ' ' << '|' << std::endl;
 		}
 
 		// Print table bottom
@@ -376,30 +418,33 @@ void Start()
 		std::cout << "[pkodev.mod.loader] Mods not found." << std::endl << std::endl;
 		return;
 	}
+	
+	// Write a message with the disabled mods number
+	std::cout << "[pkodev.mod.loader] " << disabled_counter << " mods are disabled. " << std::endl;
 
 	// Write a message that mods are being launched
 	std::cout << "[pkodev.mod.loader] Launching mods . . ." << std::endl;
 
+	// Extract directory from path
+	auto extract_filepath = [](const std::string& path) -> std::string
+	{
+		// Looking for last slash
+		std::size_t pos = path.find_last_of("/\\");
+
+		// Check that the slash is found
+		if (pos != std::string::npos)
+		{
+			// Extract directory
+			return path.substr(0, pos);
+		}
+
+		// Could not extract directory
+		return path;
+	};
+
 	// Start mods
 	for (const pkodev::mod& mod : pkodev::global::mods)
 	{
-		// Extract directory from path
-		auto extract_filepath = [](const std::string& path) -> std::string
-		{
-			// Looking for last slash
-			std::size_t pos = path.find_last_of("/\\");
-
-			// Check that the slash is found
-			if (pos != std::string::npos)
-			{
-				// Extract directory
-				return path.substr(0, pos);
-			}
-
-			// Could not extract directory
-			return path;
-		};
-		
 		// Launch the mod
 		if (mod.start != nullptr)
 		{
@@ -479,7 +524,7 @@ void SearchLibraries(const std::string& path, std::vector<std::string>& arr)
 			{
 				// Regular expression for a mod library name
 				static const std::regex name_regex(
-					"pkodev\\.mod\\.\\w+\\.(?:client|server)\\.\\w+\\.dll",
+					"^pkodev\\.mod\\.\\w+\\.(?:client|server|gate)\\.\\w+\\.dll$",
 					std::regex::icase
 				);
 
@@ -499,4 +544,52 @@ void SearchLibraries(const std::string& path, std::vector<std::string>& arr)
 
 	// Close search handle
 	FindClose(hFind);
+}
+
+// Load the list of disabled mods
+void LoadDotDisabled(const std::string& path, std::vector<std::string>& disabled)
+{
+	// Try to open the .disabled file
+	std::ifstream file(path, std::ios::in);
+
+	// Check that file is open
+	if (file.is_open() == false)
+	{
+		// The file not found or cannot be read
+		return;
+	}
+
+	// Regular expression for a mod library name
+	const std::regex name_regex("^pkodev\\.mod\\.\\w+$", std::regex::icase);
+
+	// Read the file line-by-line
+	for (std::string line(""); std::getline(file, line); )
+	{
+		// Remove the spaces from the line
+		line.erase(std::remove_if(line.begin(), line.end(), ::isspace), line.end());
+
+		// Check that line is empty
+		if (line.empty() == true)
+		{
+			// Skip the line
+			continue;
+		}
+
+		// Check that line is commented
+		if (line.find("//") == 0)
+		{
+			// Skip the line
+			continue;
+		}
+
+		// Check that the file name matches the pattern
+		if (std::regex_match(line, name_regex) == true)
+		{
+			// Add the file to list
+			disabled.push_back(line);
+		}
+	}
+
+	// Close the file
+	file.close();
 }
