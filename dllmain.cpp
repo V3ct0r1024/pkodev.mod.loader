@@ -19,50 +19,53 @@ namespace pkodev
 	typedef int(__cdecl* mainCRTStartup__Ptr)();            // Pointer to mainCRTStartup() function from .exe
 	typedef void(__stdcall* RtlExitUserProcess__Ptr)(UINT); // Pointer to RtlExitUserProcess() function from ntdll.dll
 
-	// Destination .exe data
-	struct exe_ver
+	// Destination executable file (Game.exe/GameServer.exe/GateServer.exe) data
+	struct executable_version
 	{
-		// ID
+		// ID from loader.h file
 		unsigned int id;
 
-		// Name
-		std::string name;
-
-		// Linker timestamp
+		// Linker build timestamp
 		unsigned int timestamp;
 
+		// Human name
+		std::string name;
+
 		// Constructor
-		exe_ver() :
-			id(0),
-			name(""),
-			timestamp(0)
+		executable_version() :
+			id(EXE_UNKNOWN),
+			timestamp(0),
+			name("EXE_UNKNOWN")
 		{
 
 		}
 
 		// Constructor
-		exe_ver(unsigned int id_, const std::string& name_, unsigned int timestamp_) :
+		executable_version(unsigned int id_, unsigned int timestamp_, const std::string& name_) :
 			id(id_),
-			name(name_),
-			timestamp(timestamp_)
+			timestamp(timestamp_),
+			name(name_)
 		{
 
 		}
 	};
 
-	// Some information about a mod
-	struct mod
+	// pkodev.mod data
+	struct pkodev_mod
 	{
-		// Name of a mod
+		// Load priority
+		unsigned int priority;
+
+		// Name of the mod
 		std::string name;
 
 		// Version of the mod
 		std::string version;
 
-		// The mod author
+		// Author of the mod
 		std::string author;
 
-		// Path to DLL
+		// Path to the mod DLL
 		std::string path;
 
 		// Enable mod function pointer
@@ -71,65 +74,59 @@ namespace pkodev
 		// Disable mod function pointer
 		Stop__Ptr stop;
 
-		// .dll handle
+		// The mod .dll handle
 		HMODULE handle;
 
-		// Load priority
-		unsigned int priority;
-
 		// Constructor
-		mod() :
+		pkodev_mod() :
+			priority(0),
 			name(""),
 			version(""),
 			author(""),
 			path(""),
 			start(nullptr),
 			stop(nullptr),
-			handle(nullptr),
-			priority(0)
+			handle(nullptr)
 		{
 
 		}
 	};
 
-	namespace global
-	{
-		// Regular expression for a mod library name
-		const std::regex name_regex("^pkodev\\.mod\\.\\w+$", std::regex::icase);
+	// Regular expression for a mod name
+	const std::regex name_regex("^pkodev\\.mod\\.\\w+$", std::regex::icase); // pkodev.mod.<name>
 
-		// Regular expression for a mod library name (.dll)
-		const std::regex dll_regex(
-			"^pkodev\\.mod\\.\\w+\\.(?:client|server|gate)\\.\\w+\\.dll$",
-			std::regex::icase
-		);
+	// Regular expression for a mod library name (.dll)
+	const std::regex dll_regex(                                              // pkodev.mod.<name>.<client|server|gate>.<ver>.dll
+		"^pkodev\\.mod\\.\\w+\\.(?:client|server|gate)\\.\\w+\\.dll$",
+		std::regex::icase
+	);
 
-		// Pointer to mainCRTStartup() function from .exe
-		mainCRTStartup__Ptr mainCRTStartup = nullptr;
+	// Pointer to the mainCRTStartup() function from destination executable file
+	mainCRTStartup__Ptr mainCRTStartup = nullptr;
 
-		// Pointer to RtlExitUserProcess function from ntdll.dll
-		RtlExitUserProcess__Ptr RtlExitUserProcess = nullptr;
+	// Pointer to the RtlExitUserProcess function from ntdll.dll
+	RtlExitUserProcess__Ptr RtlExitUserProcess = nullptr;
 
-		// Linker timestamp
-		unsigned int TimeDateStamp = 0;
+	// Linker build timestamp
+	unsigned int TimeDateStamp = 0;
 
-		// List of available mods
-		std::vector<mod> mods;
-	}
+	// List of available mods
+	std::vector<pkodev_mod> mods;
 }
 
-// Start mod system
+// Start the mod loader system
 void Start();
 
-// Stop mod system
+// Stop the mod loader system
 void Stop();
 
 // Search mod libraries
 void SearchLibraries(const std::string& path, std::vector<std::string>& arr);
 
-// Load the list of disabled mods
+// Load the list of disabled mods (.disabled)
 void LoadDotDisabled(const std::string& path, std::vector<std::string>& disabled);
 
-// Load the mod priority list
+// Load the mod priority list (.priority)
 void LoadDotPriority(const std::string& path, std::queue<std::string>& priority);
 
 // Hooked version of mainCRTStartup() function
@@ -142,7 +139,7 @@ void __stdcall RtlExitUserProcess(UINT code);
 bool StrCompareI(const std::string& str1, const std::string& str2);
 
 
-// Dummy function for export to GameServer.exe and Game.exe
+// Dummy function for export to executable file (Game.exe/GameServer.exe/GateServer.exe)
 __declspec(dllexport) void __cdecl ExportedFunction() {}
 
 // Entry point
@@ -156,7 +153,7 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 		// DLL attached to the proccess
         case DLL_PROCESS_ATTACH:
 
-			// Get address of entry point and linker timestamp
+			// Get address of entry point and linker build timestamp
 			{
 				// Pointers to DOS, PE and COFF headers of .exe file
 				const PIMAGE_DOS_HEADER pidh = reinterpret_cast<PIMAGE_DOS_HEADER>(GetModuleHandle(NULL));
@@ -164,12 +161,12 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 				const PIMAGE_FILE_HEADER pifh = reinterpret_cast<PIMAGE_FILE_HEADER>(&pinh->FileHeader);
 
 				// Get pointer to mainCRTStartup() function
-				pkodev::global::mainCRTStartup = reinterpret_cast<pkodev::mainCRTStartup__Ptr>(
+				pkodev::mainCRTStartup = reinterpret_cast<pkodev::mainCRTStartup__Ptr>(
 					( pinh->OptionalHeader.AddressOfEntryPoint + pinh->OptionalHeader.ImageBase )
 				);
 
 				// Get linker timestamp
-				pkodev::global::TimeDateStamp = static_cast<unsigned int>(pifh->TimeDateStamp);
+				pkodev::TimeDateStamp = static_cast<unsigned int>(pifh->TimeDateStamp);
 			}
 
 			// Get address of RtlExitUserProcess() function
@@ -178,24 +175,23 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 				const HMODULE hmodntdll = GetModuleHandleA("ntdll");
 
 				// Check the modult handle
-				if (hmodntdll != NULL)
+				if (hmodntdll != nullptr)
 				{
 					// Get pointer to RtlExitUserProcess() function
-					pkodev::global::RtlExitUserProcess = reinterpret_cast<pkodev::RtlExitUserProcess__Ptr>(
+					pkodev::RtlExitUserProcess = reinterpret_cast<pkodev::RtlExitUserProcess__Ptr>(
 						GetProcAddress(hmodntdll, "RtlExitUserProcess")
 					);
 				}
 			}
 
 			// Enable hooks
-			if ( (pkodev::global::mainCRTStartup != nullptr)
-				&& (pkodev::global::RtlExitUserProcess != nullptr) )
+			if ( (pkodev::mainCRTStartup != nullptr) && (pkodev::RtlExitUserProcess != nullptr) )
 			{
 				DetourRestoreAfterWith();
 				DetourTransactionBegin();
 				DetourUpdateThread(GetCurrentThread());
-				DetourAttach(&(PVOID&)pkodev::global::mainCRTStartup, mainCRTStartup);
-				DetourAttach(&(PVOID&)pkodev::global::RtlExitUserProcess, RtlExitUserProcess);
+				DetourAttach(&(PVOID&)pkodev::mainCRTStartup, mainCRTStartup);
+				DetourAttach(&(PVOID&)pkodev::RtlExitUserProcess, RtlExitUserProcess);
 				DetourTransactionCommit();
 			}
 
@@ -205,13 +201,12 @@ BOOL APIENTRY DllMain( HMODULE hModule,
         case DLL_PROCESS_DETACH:
 
 			// Disable hooks
-			if ( (pkodev::global::mainCRTStartup != nullptr)
-				&& (pkodev::global::RtlExitUserProcess != nullptr) )
+			if ( (pkodev::mainCRTStartup != nullptr) && (pkodev::RtlExitUserProcess != nullptr) )
 			{
 				DetourTransactionBegin();
 				DetourUpdateThread(GetCurrentThread());
-				DetourDetach(&(PVOID&)pkodev::global::mainCRTStartup, mainCRTStartup);
-				DetourDetach(&(PVOID&)pkodev::global::RtlExitUserProcess, RtlExitUserProcess);
+				DetourDetach(&(PVOID&)pkodev::mainCRTStartup, mainCRTStartup);
+				DetourDetach(&(PVOID&)pkodev::RtlExitUserProcess, RtlExitUserProcess);
 				DetourTransactionCommit();
 			}
 
@@ -224,91 +219,88 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 // Hooked version of mainCRTStartup() function
 int __cdecl mainCRTStartup()
 {
-	// Launch mod system
+	// Start the mod loader system
 	Start();
 
 	// Call original entry point
-	return pkodev::global::mainCRTStartup();
+	return pkodev::mainCRTStartup();
 }
 
 // Hooked version of RtlExitUserProcess() function
 void __stdcall RtlExitUserProcess(UINT code)
 {
-	// Stop mod system
+	// Stop the mod loader system
 	Stop();
 
 	// Call original exit proccess function
-	pkodev::global::RtlExitUserProcess(code);
+	pkodev::RtlExitUserProcess(code);
 }
 
-// Start mod system
+// Start the mod loader system
 void Start()
 {
 	// Supported executables files table
-	std::vector<pkodev::exe_ver> exes;
-	exes.push_back( { GAMESERVER_136, "GameServer 1.36",       1204708785 } );
-	exes.push_back( { GAMESERVER_138, "GameServer 1.38",       1225867911 } );
-	exes.push_back( { GAME_13X_0,     "Game.exe 1.3x (ID: 0)", 1222073761 } );
-	exes.push_back( { GAME_13X_1,     "Game.exe 1.3x (ID: 1)", 1243412597 } );
-	exes.push_back( { GAME_13X_2,     "Game.exe 1.3x (ID: 2)", 1252912474 } );
-	exes.push_back( { GAME_13X_3,     "Game.exe 1.3x (ID: 3)", 1244511158 } );
-	exes.push_back( { GAME_13X_4,     "Game.exe 1.3x (ID: 4)", 1585009030 } );
-	exes.push_back( { GAME_13X_5,     "Game.exe 1.3x (ID: 5)", 1207214236 } );
-	exes.push_back( { GATESERVER_138, "GateServer 1.38",       1224838480 } );
+	std::vector<pkodev::executable_version> exes;
+	exes.push_back( { TS_GAMESERVER_136, GAMESERVER_136, "GameServer 1.36"        } );
+	exes.push_back( { TS_GAMESERVER_138, GAMESERVER_138, "GameServer 1.38"        } );
+	exes.push_back( { TS_GAME_13X_0,     GAME_13X_0,     "Game.exe 1.3x (ID: 0)"  } );
+	exes.push_back( { TS_GAME_13X_1,     GAME_13X_1,     "Game.exe 1.3x (ID: 1)"  } );
+	exes.push_back( { TS_GAME_13X_2,     GAME_13X_2,     "Game.exe 1.3x (ID: 2)"  } );
+	exes.push_back( { TS_GAME_13X_3,     GAME_13X_3,     "Game.exe 1.3x (ID: 3)"  } );
+	exes.push_back( { TS_GAME_13X_4,     GAME_13X_4,     "Game.exe 1.3x (ID: 4)"  } );
+	exes.push_back( { TS_GAME_13X_5,     GAME_13X_5,     "Game.exe 1.3x (ID: 5)"  } );
+	exes.push_back( { TS_GATESERVER_138, GATESERVER_138, "GateServer 1.38"        } );
 
 	// Write a welcome message
 	std::cout << "[pkodev.mod.loader] -----------------------------------------------" << std::endl;
-	std::cout << "[pkodev.mod.loader]    PKOdev.NET mod loader ver. 1.0 by V3ct0r    " << std::endl;
+	std::cout << "[pkodev.mod.loader]    PKOdev.NET mod loader ver. 1.1 by V3ct0r    " << std::endl;
 	std::cout << "[pkodev.mod.loader] -----------------------------------------------" << std::endl;
 
-	// Search current .exe in list of supported executables
+	// Search current executable file in list of supported executables
 	auto exe = std::find_if(exes.cbegin(), exes.cend(),
-		[](const pkodev::exe_ver& exe) -> bool
+		[](const pkodev::executable_version& exe) -> bool
 		{
-			return ( pkodev::global::TimeDateStamp == exe.timestamp );
+			return ( pkodev::TimeDateStamp == exe.timestamp );
 		}
 	);
 
-	// Check that .exe is supported
+	// Check that the executable is supported
 	if ( exe == exes.cend() )
 	{
-		// Unsupported .exe version!
-		std::cout << "[pkodev.mod.loader] Unsupported .exe file!" << std::endl << std::endl;
+		// Unsupported executable version!
+		std::cout << "[pkodev.mod.loader] Unsupported executable (.exe) file!" << std::endl << std::endl;
 		return;
 	}
 
-	// Write .exe version
-	std::cout << "[pkodev.mod.loader] Detected .exe file: '" << exe->name << "'." << std::endl;
+	// Write executable version
+	std::cout << "[pkodev.mod.loader] Detected executable (.exe) file: '" << exe->name << "'." << std::endl;
 
 	// Write a message
 	std::cout << "[pkodev.mod.loader] Searching mods in 'mods' directory . . ." << std::endl;
 
 	// Search mods
-	std::vector<std::string> arr;  // List of dynamic mod libraries
+	std::vector<std::string> arr;         // List of dynamic mod libraries
 	SearchLibraries("mods", arr);
 
 	// Search disabled mods
-	std::vector<std::string> disabled;
+	unsigned int disabled_counter = 0;    // Disabled mods counter
+	std::vector<std::string> disabled;    // List of disabled mods
 	LoadDotDisabled("mods\\.disabled", disabled);
 
 	// Load priority list
-	std::queue<std::string> priority;
+	std::queue<std::string> priority;     // Mod load priority list
 	LoadDotPriority("mods\\.priority", priority);
-
-
-	// Disabled mods counter
-	unsigned int disabled_counter = 0;
 
 	// Load mods . . .
 	for (const std::string& path : arr)
 	{
-		// Load current .dll
+		// Load current .dll file
 		HMODULE dll = LoadLibraryA(path.c_str());
 
 		// Check result
 		if (dll == nullptr)
 		{
-			// Failed to load the .dll!
+			// Failed to load the .dll file!
 			continue;
 		}
 
@@ -336,7 +328,7 @@ void Start()
 		}
 
 		// Get mod information
-		mod_info info;             // Mod information structure
+		mod_info info;
 		GetModInformation(info); 
 
 		// Check .exe version
@@ -352,10 +344,7 @@ void Start()
 
 		// Search the mod in the disabled mods list
 		auto disabled_it = std::find_if(disabled.cbegin(), disabled.cend(),
-			[&name](const std::string& name_) -> bool
-			{
-				return StrCompareI(name, name_);
-			}
+			[&name](const std::string& name_) -> bool { return StrCompareI(name, name_); }
 		);
 
 		// Check that mod is not disabled
@@ -368,17 +357,12 @@ void Start()
 		}
 
 		// Search mod in list of loaded mods
-		auto loaded_it = std::find_if(
-			pkodev::global::mods.cbegin(),
-			pkodev::global::mods.cend(),
-			[&info](const pkodev::mod& mod)
-			{
-				return ( mod.name == std::string(info.name) );
-			}
+		auto loaded_it = std::find_if(pkodev::mods.cbegin(), pkodev::mods.cend(),
+			[&name](const pkodev::pkodev_mod& mod) -> bool { return StrCompareI(mod.name, name); }
 		);
 
 		// Check that mod is not already loaded
-		if (loaded_it != pkodev::global::mods.cend() )
+		if (loaded_it != pkodev::mods.cend())
 		{
 			// Mod is already loaded
 			FreeLibrary(dll);
@@ -386,27 +370,28 @@ void Start()
 		}
 
 		// Create mod record
-		pkodev::mod mod;
-		mod.name    = name;
-		mod.version = std::string(info.version);
-		mod.author  = std::string(info.author);
-		mod.path    = path;
-		mod.start   = Start;
-		mod.stop    = Stop;
-		mod.handle  = dll;
+		pkodev::pkodev_mod mod;
+		mod.priority = 0;
+		mod.name     = name;
+		mod.version  = std::string(info.version);
+		mod.author   = std::string(info.author);
+		mod.path     = path;
+		mod.start    = Start;
+		mod.stop     = Stop;
+		mod.handle   = dll;
 
-		// Add mod to the list
-		pkodev::global::mods.push_back(mod);
+		// Add the mod to the list
+		pkodev::mods.push_back(mod);
 	}
 
-	// Print found mods
-	if ( pkodev::global::mods.empty() == false )
+	// Print the list of found and enabled mods
+	if (pkodev::mods.empty() == false)
 	{
 		// Mods counter
 		unsigned int counter = 0;
 
 		// Print number of mods found 
-		std::cout << "[pkodev.mod.loader] Done! (" << pkodev::global::mods.size() << ") mods found out: " << std::endl;
+		std::cout << "[pkodev.mod.loader] Done! (" << pkodev::mods.size() << ") mods found out: " << std::endl;
 
 		// Print table header
 		std::cout << '+' << std::setfill('-') << std::setw(5) << '+'  <<        std::setw(33) << '+'    <<        std::setw(11) << '+'        <<        std::setw(17) << '+'              << std::endl;
@@ -414,7 +399,7 @@ void Start()
 		std::cout << '+' << std::setfill('-') << std::setw(5) << '+'  <<        std::setw(33) << '+'    <<        std::setw(11) << '+'        <<        std::setw(17) << '+'              << std::endl;
 
 		// Print mods
-		for (const pkodev::mod& mod : pkodev::global::mods)
+		for (const pkodev::pkodev_mod& mod : pkodev::mods)
 		{
 			// Print information about the mod
 			std::cout << '|' << std::setfill(' ') << std::setw(3) << ++counter << '.' << '|' << std::setw(31) << mod.name << ' ' << '|' << std::setw(9) << mod.version << ' ' << '|' << std::setw(24) << mod.author << ' ' << '|' << std::endl;
@@ -431,12 +416,12 @@ void Start()
 	}
 	
 	// Write a message with the disabled mods number
-	std::cout << "[pkodev.mod.loader] " << disabled_counter << " mods are disabled. " << std::endl;
+	std::cout << "[pkodev.mod.loader] (" << disabled_counter << ") mods are disabled. " << std::endl;
 
-	// Write a message that mods are being launched
-	std::cout << "[pkodev.mod.loader] Launching mods . . ." << std::endl;
+	// Write a message that mods are being started
+	std::cout << "[pkodev.mod.loader] Starting mods . . ." << std::endl;
 
-	// Extract directory from path
+	// Utils: extract directory from path
 	auto extract_filepath = [](const std::string& path) -> std::string
 	{
 		// Looking for last slash
@@ -453,7 +438,7 @@ void Start()
 		return path;
 	};
 
-	// Sort mods by priority
+	// Sort mods by load priority
 	unsigned int priority_counter = 0;
 	if (priority.empty() == false)
 	{
@@ -461,60 +446,55 @@ void Start()
 		while (priority.empty() == false)
 		{
 			// Get current mod name
-			const std::string& name_ = priority.front();
-			priority.pop();
+			const std::string& name = priority.front();
 
 			// Search the mod in the list of mods
-			auto it = std::find_if(pkodev::global::mods.begin(), pkodev::global::mods.end(),
-				[&name_](const pkodev::mod& mod_) -> bool
+			auto it = std::find_if(pkodev::mods.begin(), pkodev::mods.end(),
+				[&name](const pkodev::pkodev_mod& mod) -> bool
 				{
-					return StrCompareI(mod_.name, name_);
+					return StrCompareI(mod.name, name);
 				}
 			);
 
 			// Check that mod is found
-			if (it != pkodev::global::mods.end())
+			if (it != pkodev::mods.end())
 			{
 				// Set mod priority
 				it->priority = ++priority_counter;
 			}
+
+			// Remove current priority from the queue
+			priority.pop();
 		}
 
 		// Sort the list of mods
-		std::sort(pkodev::global::mods.begin(), pkodev::global::mods.end(),
-			[](const pkodev::mod& a, const pkodev::mod& b)
+		std::sort(pkodev::mods.begin(), pkodev::mods.end(),
+			[](const pkodev::pkodev_mod& a, const pkodev::pkodev_mod& b)
 			{
-				return a.priority > b.priority;
+				return (a.priority > b.priority);
 			}
 		);
 	}
 
 	// Start mods
-	for (const pkodev::mod& mod : pkodev::global::mods)
+	for (const pkodev::pkodev_mod& mod : pkodev::mods)
 	{
-		// Launch the mod
-		if (mod.start != nullptr)
-		{
-			mod.start( extract_filepath(mod.path).c_str() );
-		}
+		// Start the mod
+		mod.start( extract_filepath(mod.path).c_str() );
 	}
 
 	// Write a message that mods are launched
 	std::cout << "[pkodev.mod.loader] All mods launched!" << std::endl << std::endl;
 }
 
-// Stop mod loader
+// Stop the mod loader system
 void Stop()
 {
 	// Disable all mods
-	for (pkodev::mod& mod : pkodev::global::mods)
+	for (const pkodev::pkodev_mod& mod : pkodev::mods)
 	{
-		// Disable the mod
-		if (mod.stop != nullptr)
-		{
-			// Call Stop() function from mod .dll
-			mod.stop();
-		}
+		// Stop the mod
+		mod.stop();
 		
 		// Unload mod .dll
 		FreeLibrary(mod.handle);
@@ -524,7 +504,7 @@ void Stop()
 	}
 
 	// Clear mods list
-	pkodev::global::mods.clear();
+	pkodev::mods.clear();
 }
 
 // Search mod libraries
@@ -570,7 +550,7 @@ void SearchLibraries(const std::string& path, std::vector<std::string>& arr)
 			else
 			{
 				// Check that the file name matches the pattern
-				if (std::regex_match(file, pkodev::global::dll_regex) == true)
+				if (std::regex_match(file, pkodev::dll_regex) == true)
 				{
 					// Build full file path
 					sprintf_s(buf, sizeof(buf), "%s\\%s", path.c_str(), file.c_str());
@@ -587,7 +567,7 @@ void SearchLibraries(const std::string& path, std::vector<std::string>& arr)
 	FindClose(hFind);
 }
 
-// Load the list of disabled mods
+// Load the list of disabled mods (.disabled)
 void LoadDotDisabled(const std::string& path, std::vector<std::string>& disabled)
 {
 	// Try to open the .disabled file
@@ -621,7 +601,7 @@ void LoadDotDisabled(const std::string& path, std::vector<std::string>& disabled
 		}
 
 		// Check that the file name matches the pattern
-		if (std::regex_match(line, pkodev::global::name_regex) == true)
+		if (std::regex_match(line, pkodev::name_regex) == true)
 		{
 			// Add the file to list
 			disabled.push_back(line);
@@ -632,7 +612,7 @@ void LoadDotDisabled(const std::string& path, std::vector<std::string>& disabled
 	file.close();
 }
 
-// Load the mod priority list
+// Load the mod priority list  (.priority)
 void LoadDotPriority(const std::string& path, std::queue<std::string>& priority)
 {
 	// Try to open the .priority file
@@ -666,7 +646,7 @@ void LoadDotPriority(const std::string& path, std::queue<std::string>& priority)
 		}
 
 		// Check that the file name matches the pattern
-		if (std::regex_match(line, pkodev::global::name_regex) == true)
+		if (std::regex_match(line, pkodev::name_regex) == true)
 		{
 			// Add the file to list
 			priority.push(line);
