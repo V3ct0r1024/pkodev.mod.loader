@@ -241,15 +241,16 @@ void Start()
 {
 	// Supported executables files table
 	std::vector<pkodev::executable_version> exes;
-	exes.push_back( { GAMESERVER_136, TS_GAMESERVER_136, "GameServer 1.36"        } );
-	exes.push_back( { GAMESERVER_138, TS_GAMESERVER_138, "GameServer 1.38"        } );
-	exes.push_back( { GAME_13X_0,     TS_GAME_13X_0,     "Game.exe 1.3x (ID: 0)"  } );
-	exes.push_back( { GAME_13X_1,     TS_GAME_13X_1,     "Game.exe 1.3x (ID: 1)"  } );
-	exes.push_back( { GAME_13X_2,     TS_GAME_13X_2,     "Game.exe 1.3x (ID: 2)"  } );
-	exes.push_back( { GAME_13X_3,     TS_GAME_13X_3,     "Game.exe 1.3x (ID: 3)"  } );
-	exes.push_back( { GAME_13X_4,     TS_GAME_13X_4,     "Game.exe 1.3x (ID: 4)"  } );
-	exes.push_back( { GAME_13X_5,     TS_GAME_13X_5,     "Game.exe 1.3x (ID: 5)"  } );
-	exes.push_back( { GATESERVER_138, TS_GATESERVER_138, "GateServer 1.38"        } );
+	exes.push_back( { GAMESERVER_136, TS_GAMESERVER_136,   "GameServer 1.36"        } );
+	exes.push_back( { GAMESERVER_138, TS_GAMESERVER_138,   "GameServer 1.38"        } );
+	exes.push_back( { GAME_13X_0,     TS_GAME_13X_0,       "Game.exe 1.3x (ID: 0)"  } );
+	exes.push_back( { GAME_13X_1,     TS_GAME_13X_1,       "Game.exe 1.3x (ID: 1)"  } );
+	exes.push_back( { GAME_13X_2,     TS_GAME_13X_2,       "Game.exe 1.3x (ID: 2)"  } );
+	exes.push_back( { GAME_13X_3,     TS_GAME_13X_3,       "Game.exe 1.3x (ID: 3)"  } );
+	exes.push_back( { GAME_13X_4,     TS_GAME_13X_4,       "Game.exe 1.3x (ID: 4)"  } );
+	exes.push_back( { GAME_13X_5,     TS_GAME_13X_5,       "Game.exe 1.3x (ID: 5)"  } );
+	exes.push_back( { GATESERVER_138,  TS_GATESERVER_138,  "GateServer 1.38"        } );
+	exes.push_back( { GROUPSERVER_138, TS_GROUPSERVER_138, "GroupServer 1.38"       } );
 
 	// Write a welcome message
 	std::cout << "[pkodev.mod.loader] -----------------------------------------------" << std::endl;
