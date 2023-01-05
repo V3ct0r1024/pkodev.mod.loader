@@ -97,7 +97,7 @@ namespace pkodev
 
 	// Regular expression for a mod library name (.dll)
 	const std::regex dll_regex(                                              // pkodev.mod.<name>.<client|server|gate>.<ver>.dll
-		"^pkodev\\.mod\\.\\w+\\.(?:client|server|gate)\\.\\w+\\.dll$",
+		"^pkodev\\.mod\\.\\w+\\.(?:client|server|gate|group)\\.\\w+\\.dll$",
 		std::regex::icase
 	);
 

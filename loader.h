@@ -1,6 +1,6 @@
 #pragma once
 
-// Destination GameServer.exe, GateServer.exe and Game.exe versions
+// Destination executable files versions
 const unsigned int EXE_UNKNOWN     = 0;   // 0
 const unsigned int GAMESERVER_136  = 1;   // 1204708785
 const unsigned int GAMESERVER_138  = 2;   // 1225867911
@@ -13,7 +13,7 @@ const unsigned int GAME_13X_5      = 8;   // 1207214236
 const unsigned int GATESERVER_138  = 101; // 1224838480
 const unsigned int GROUPSERVER_138 = 201; // 1224838510
 
-// Destination GameServer.exe, GateServer.exe and Game.exe linker build timestamps
+// Destination executable files linker build timestamps
 const unsigned int TS_EXE_UNKNOWN     = 0;  
 const unsigned int TS_GAMESERVER_136  = 1204708785;
 const unsigned int TS_GAMESERVER_138  = 1225867911; 
